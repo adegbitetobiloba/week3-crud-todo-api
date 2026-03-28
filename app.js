@@ -6,6 +6,11 @@ require('dotenv').config();
 // MIDDLEWARE (to read JSON)
 app.use(express.json());
 
+// NEW IMPRO
+app.get('/', (req, res) => {
+    res.send('Welcome to Tobi’s Todo API 🚀');
+});
+
 // FAKE DATABASE
 let students = [];
 
@@ -95,8 +100,13 @@ app.delete('/students/:id', (req, res) => {
 // =============================
 // START SERVER
 // =============================
+require('dotenv').config(); 
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+
+require('dotenv').config();
