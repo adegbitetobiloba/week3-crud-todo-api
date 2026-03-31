@@ -1,51 +1,35 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student app</title>
-</head>
+    <title>Student Manager</title>
+    <link rel="stylesheet" href="style.css">
 <body>
-    <h2>Add Student</h2>
 
-<input id="name" placeholder="Name">
-<input id="course" placeholder="Course">
-<button onclick="addStudent()">Add</button>
+<div class="container">
 
-<h2>Students</h2>
-<ul id="list"></ul>
+    <h1>🎓 Student Manager</h1>
 
-<script>
-const API = "https://week3-crud-todo-api-nge7.onrender.com";
+    <div class="auth">
+        <button onclick="register()">Register</button>
+        <button onclick="login()">Login</button>
+    </div>
 
-async function addStudent() {
-    const name = document.getElementById('name').value;
-    const course = document.getElementById('course').value;
+    <div class="form">
+        <input id="name" placeholder="Student Name">
+        <input id="course" placeholder="Course">
+        <button onclick="addStudent()">Add Student</button>
+    </div>
 
-    await fetch(`${API}/students`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, course })
-    });
+    <div class="controls">
+        <button onclick="loadStudents()">Load Students</button>
+    </div>
 
-    loadStudents();
-}
+    <ul id="list"></ul>
 
-async function loadStudents() {
-    const res = await fetch(`${API}/students`);
-    const data = await res.json();
+</div>
 
-    const list = document.getElementById('list');
-    list.innerHTML = "";
-
-    data.forEach(s => {
-        const li = document.createElement('li');
-        li.textContent = s.name + " - " + s.course;
-        list.appendChild(li);
-    });
-}
-
-loadStudents();
-</script>
-
+<script src="script.js"></script>
 </body>
 </html>

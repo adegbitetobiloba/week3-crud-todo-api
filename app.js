@@ -31,7 +31,7 @@ console.log("ENV CHECK:", process.env.MONGO_URI);
 app.use(express.json());
 
 // NEW IMPRO
-app.get('/', (req, res) => {
+app.get('/',auth, (req, res) => {
     res.send('Welcome to Tobi’s Todo API 🚀');
 });
 
@@ -55,7 +55,7 @@ const Student = mongoose.model('Student', studentSchema);
 // =============================
 // CREATE STUDENT (POST)
 // =============================
-app.post('/students', async (req, res) => {
+app.post('/students',auth, async (req, res) => {
     try {
         const { name, course } = req.body;
 
@@ -75,7 +75,7 @@ app.post('/students', async (req, res) => {
 // =============================
 //POST REGISTER NEW STUDENT
 // =============================
-app.post('/register', async (req, res) => {
+app.post('/register',auth, async (req, res) => {
     const { email, password } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -92,17 +92,27 @@ app.post('/register', async (req, res) => {
 const jwt = require('jsonwebtoken');
 
 app.post('/login', async (req, res) => {
+    console.log(req.body); // 👈 ADD THIS
+
     const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password required" });
+    }
 
     const user = await User.findOne({ email });
 
-    if (!user) return res.status(400).json({ error: 'User not found' });
+    if (!user) {
+        return res.status(400).json({ error: 'User not found' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
-    if (!isMatch) return res.status(400).json({ error: 'Invalid password' });
+    if (!isMatch) {
+        return res.status(400).json({ error: 'Invalid password' });
+    }
 
-    const token = jwt.sign({ id: user._id }, 'secretkey');
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
     res.json({ token });
 });
@@ -110,7 +120,7 @@ app.post('/login', async (req, res) => {
 // =============================
 // GET ALL STUDENTS (GET)
 // =============================
-app.get('/students', async (req, res) => {
+app.get('/students',auth, async (req, res) => {
     const students = await Student.find();
     res.json(students);
 });
@@ -118,7 +128,7 @@ app.get('/students', async (req, res) => {
 // =============================
 // GET ONE STUDENT (GET)
 // =============================
-app.get('/students/:id', async (req, res) => {
+app.get('/students/:id',auth, async (req, res) => {
     const student = await Student.findById(req.params.id);
 
     if (!student) {
@@ -131,7 +141,7 @@ app.get('/students/:id', async (req, res) => {
 // =============================
 // UPDATE STUDENT (PUT)
 // =============================
-app.put('/students/:id', async (req, res) => {
+app.put('/students/:id',auth, async (req, res) => {
     const student = await Student.findByIdAndUpdate(
         req.params.id,
         req.body,
@@ -144,11 +154,30 @@ app.put('/students/:id', async (req, res) => {
 // =============================
 // DELETE STUDENT (DELETE)
 // =============================
-app.delete('/students/:id', async (req, res) => {
+app.delete('/students/:id',auth, async (req, res) => {
     await Student.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
 });
 
+
+// AUTH MIDDLEWARE
+function auth(req, res, next) {
+    const header = req.headers.authorization;
+
+    if (!header) {
+        return res.status(401).json({ error: 'Access denied' });
+    }
+
+    const token = header.split(' ')[1];
+
+    try {
+        const verified = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
+        req.user = verified;
+        next();
+    } catch (err) {
+        res.status(400).json({ error: 'Invalid token' });
+    }
+}
 // =============================
 // START SERVER
 // =============================
