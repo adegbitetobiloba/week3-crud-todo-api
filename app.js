@@ -9,6 +9,9 @@ const mongoose = require('mongoose');
 mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log('MongoDB Connected ✅'))
 .catch(err => console.log(err));
+if (!process.env.MONGO_URI) {
+    console.log("MONGO_URI is missing ❌");
+}
 
 //IMPORT BYCRYPT
 const bcrypt = require('bcryptjs');
