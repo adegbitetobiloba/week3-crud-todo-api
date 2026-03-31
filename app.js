@@ -1,7 +1,24 @@
  // IMPORT EXPRESS
 const express = require('express');
 const app = express();
+
 require('dotenv').config();
+// IMPORT MONGOOSE
+const mongoose = require('mongoose');
+
+mongoose.connect(process.env.MONGO_URI)
+.then(() => console.log('MongoDB Connected ✅'))
+.catch(err => console.log(err));
+
+//IMPORT BYCRYPT
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema({
+    email: String,
+    password: String
+});
+
+const User = mongoose.model('User', userSchema);
 
 // MIDDLEWARE (to read JSON)
 app.use(express.json());
@@ -11,49 +28,94 @@ app.get('/', (req, res) => {
     res.send('Welcome to Tobi’s Todo API 🚀');
 });
 
-// FAKE DATABASE
-let students = [];
+const studentSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true
+    },
+    course: {
+        type: String,
+        required: true
+    },
+    active: {
+        type: Boolean,
+        default: true
+    }
+});
+
+const Student = mongoose.model('Student', studentSchema);
 
 // =============================
 // CREATE STUDENT (POST)
 // =============================
-app.post('/students', (req, res) => {
-    const { name, course } = req.body;
+app.post('/students', async (req, res) => {
+    try {
+        const { name, course } = req.body;
 
-    // VALIDATION
-    if (!name || !course) {
-        return res.status(400).json({ error: 'Name and course required' });
+        if (!name || !course) {
+            return res.status(400).json({ error: 'Name and course required' });
+        }
+
+        const student = new Student({ name, course });
+        await student.save();
+
+        res.status(201).json(student);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
     }
+});
+ 
+// =============================
+//POST REGISTER NEW STUDENT
+// =============================
+app.post('/register', async (req, res) => {
+    const { email, password } = req.body;
 
-    const newStudent = {
-        id: students.length + 1,
-        name,
-        course,
-        active: true
-    };
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    students.push(newStudent);
+    const user = new User({ email, password: hashedPassword });
+    await user.save();
 
-    res.status(201).json(newStudent);
+    res.json({ message: 'User registered' });
+});
+
+// =============================
+//POST LOGIN NEW STUDENT
+// =============================
+const jwt = require('jsonwebtoken');
+
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) return res.status(400).json({ error: 'User not found' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) return res.status(400).json({ error: 'Invalid password' });
+
+    const token = jwt.sign({ id: user._id }, 'secretkey');
+
+    res.json({ token });
 });
 
 // =============================
 // GET ALL STUDENTS (GET)
 // =============================
-app.get('/students', (req, res) => {
+app.get('/students', async (req, res) => {
+    const students = await Student.find();
     res.json(students);
 });
 
 // =============================
 // GET ONE STUDENT (GET)
 // =============================
-app.get('/students/:id', (req, res) => {
-    const id = parseInt(req.params.id);
-
-    const student = students.find(s => s.id === id);
+app.get('/students/:id', async (req, res) => {
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
-        return res.status(404).json({ error: 'Student not found' });
+        return res.status(404).json({ error: 'Not found' });
     }
 
     res.json(student);
@@ -62,20 +124,12 @@ app.get('/students/:id', (req, res) => {
 // =============================
 // UPDATE STUDENT (PUT)
 // =============================
-app.put('/students/:id', (req, res) => {
-    const id = parseInt(req.params.id);
-    const { name, course, active } = req.body;
-
-    const student = students.find(s => s.id === id);
-
-    if (!student) {
-        return res.status(404).json({ error: 'Student not found' });
-    }
-
-    // UPDATE ONLY PROVIDED FIELDS
-    if (name !== undefined) student.name = name;
-    if (course !== undefined) student.course = course;
-    if (active !== undefined) student.active = active;
+app.put('/students/:id', async (req, res) => {
+    const student = await Student.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        { new: true }
+    );
 
     res.json(student);
 });
@@ -83,24 +137,14 @@ app.put('/students/:id', (req, res) => {
 // =============================
 // DELETE STUDENT (DELETE)
 // =============================
-app.delete('/students/:id', (req, res) => {
-    const id = parseInt(req.params.id);
-
-    const exists = students.some(s => s.id === id);
-
-    if (!exists) {
-        return res.status(404).json({ error: 'Student not found' });
-    }
-
-    students = students.filter(s => s.id !== id);
-
-    res.json({ message: 'Student deleted successfully' });
+app.delete('/students/:id', async (req, res) => {
+    await Student.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
 });
 
 // =============================
 // START SERVER
 // =============================
-require('dotenv').config(); 
 
 const PORT = process.env.PORT || 3000;
 
@@ -109,4 +153,3 @@ app.listen(PORT, () => {
 });
 
 
-require('dotenv').config();
