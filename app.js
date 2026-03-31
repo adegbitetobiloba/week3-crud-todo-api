@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
+
+// temporary debug
+console.log("ENV CHECK:", process.env.MONGO_URI);
+
 // MIDDLEWARE (to read JSON)
 app.use(express.json());
 
