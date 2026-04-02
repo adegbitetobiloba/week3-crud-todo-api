@@ -31,7 +31,7 @@ console.log("ENV CHECK:", process.env.MONGO_URI);
 app.use(express.json());
 
 // NEW IMPRO
-app.get('/',auth, (req, res) => {
+app.get('/', (req, res) => {
     res.send('Welcome to Tobi’s Todo API 🚀');
 });
 
@@ -75,7 +75,7 @@ app.post('/students',auth, async (req, res) => {
 // =============================
 //POST REGISTER NEW STUDENT
 // =============================
-app.post('/register',auth, async (req, res) => {
+app.post('/register', async (req, res) => {
     const { email, password } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -114,6 +114,10 @@ app.post('/login', async (req, res) => {
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
+    if (!process.env.JWT_SECRET) {
+    console.log("JWT_SECRET is missing ❌");
+}
+
     res.json({ token });
 });
 
@@ -129,6 +133,7 @@ app.get('/students',auth, async (req, res) => {
 // GET ONE STUDENT (GET)
 // =============================
 app.get('/students/:id',auth, async (req, res) => {
+    try {
     const student = await Student.findById(req.params.id);
 
     if (!student) {
@@ -136,6 +141,9 @@ app.get('/students/:id',auth, async (req, res) => {
     }
 
     res.json(student);
+} catch (err) {
+    res.status(400).json({ error: 'Invalid ID format' });
+}
 });
 
 // =============================
@@ -171,7 +179,7 @@ function auth(req, res, next) {
     const token = header.split(' ')[1];
 
     try {
-        const verified = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
         req.user = verified;
         next();
     } catch (err) {
