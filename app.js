@@ -1,199 +1,142 @@
- // IMPORT EXPRESS
 const express = require('express');
 const app = express();
-
 require('dotenv').config();
-// IMPORT MONGOOSE
-const mongoose = require('mongoose');
 
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+app.use(express.json());
+
+// CONNECT DB
 mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log('MongoDB Connected ✅'))
 .catch(err => console.log(err));
-if (!process.env.MONGO_URI) {
-    console.log("MONGO_URI is missing ❌");
-}
 
-//IMPORT BYCRYPT
-const bcrypt = require('bcryptjs');
-
+// ================= USER MODEL =================
 const userSchema = new mongoose.Schema({
-    email: String,
-    password: String
+    email: { type: String, required: true },
+    password: { type: String, required: true }
 });
-
 const User = mongoose.model('User', userSchema);
 
+// ================= STUDENT MODEL =================
+const studentSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    course: { type: String, required: true },
+    active: { type: Boolean, default: true }
+});
+const Student = mongoose.model('Student', studentSchema);
 
-// temporary debug
-console.log("ENV CHECK:", process.env.MONGO_URI);
+// ================= AUTH MIDDLEWARE =================
+function auth(req, res, next) {
+    const token = req.headers.authorization?.split(' ')[1];
 
-// MIDDLEWARE (to read JSON)
-app.use(express.json());
+    if (!token) return res.status(401).json({ error: "No token" });
 
-// NEW IMPRO
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch {
+        res.status(401).json({ error: "Invalid token" });
+    }
+}
+
+// ================= ROUTES =================
+
+// ROOT
 app.get('/', (req, res) => {
-    res.send('Welcome to Tobi’s Todo API 🚀');
+    res.send('API running 🚀');
 });
 
-const studentSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true
-    },
-    course: {
-        type: String,
-        required: true
-    },
-    active: {
-        type: Boolean,
-        default: true
+// REGISTER
+app.post('/register', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: 'All fields required' });
+        }
+
+        const hashed = await bcrypt.hash(password, 10);
+        const user = new User({ email, password: hashed });
+
+        await user.save();
+
+        res.json({ message: 'Registered successfully' });
+
+    } catch {
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
-const Student = mongoose.model('Student', studentSchema);
+// LOGIN
+app.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-// =============================
-// CREATE STUDENT (POST)
-// =============================
-app.post('/students',auth, async (req, res) => {
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ error: 'User not found' });
+
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) return res.status(400).json({ error: 'Wrong password' });
+
+        const token = jwt.sign(
+            { id: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: '1d' }
+        );
+
+        res.json({ token, user: { email: user.email } });
+
+    } catch {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// CREATE STUDENT
+app.post('/students', auth, async (req, res) => {
     try {
         const { name, course } = req.body;
 
         if (!name || !course) {
-            return res.status(400).json({ error: 'Name and course required' });
+            return res.status(400).json({ error: 'Required fields missing' });
         }
 
         const student = new Student({ name, course });
         await student.save();
 
         res.status(201).json(student);
-    } catch (err) {
+
+    } catch {
         res.status(500).json({ error: 'Server error' });
     }
 });
- 
-// =============================
-//POST REGISTER NEW STUDENT
-// =============================
-app.post('/register', async (req, res) => {
-    const { email, password } = req.body;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = new User({ email, password: hashedPassword });
-    await user.save();
-
-    res.json({ message: 'User registered' });
-});
-
-// =============================
-//POST LOGIN NEW STUDENT
-// =============================
-const jwt = require('jsonwebtoken');
-
-app.post('/login', async (req, res) => {
-    console.log(req.body); // 👈 ADD THIS
-
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-        return res.status(400).json({ error: "Email and password required" });
-    }
-
-    const user = await User.findOne({ email });
-
-    if (!user) {
-        return res.status(400).json({ error: 'User not found' });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-        return res.status(400).json({ error: 'Invalid password' });
-    }
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-
-    if (!process.env.JWT_SECRET) {
-    console.log("JWT_SECRET is missing ❌");
-}
-
-    res.json({ token });
-});
-
-// =============================
-// GET ALL STUDENTS (GET)
-// =============================
-app.get('/students',auth, async (req, res) => {
-    const students = await Student.find();
-    res.json(students);
-});
-
-// =============================
-// GET ONE STUDENT (GET)
-// =============================
-app.get('/students/:id',auth, async (req, res) => {
+// GET ALL
+app.get('/students', auth, async (req, res) => {
     try {
-    const student = await Student.findById(req.params.id);
-
-    if (!student) {
-        return res.status(404).json({ error: 'Not found' });
+        const students = await Student.find();
+        res.json(students);
+    } catch {
+        res.status(500).json({ error: 'Server error' });
     }
-
-    res.json(student);
-} catch (err) {
-    res.status(400).json({ error: 'Invalid ID format' });
-}
 });
 
-// =============================
-// UPDATE STUDENT (PUT)
-// =============================
-app.put('/students/:id',auth, async (req, res) => {
-    const student = await Student.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true }
-    );
-
-    res.json(student);
-});
-
-// =============================
-// DELETE STUDENT (DELETE)
-// =============================
-app.delete('/students/:id',auth, async (req, res) => {
-    await Student.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-});
-
-
-// AUTH MIDDLEWARE
-function auth(req, res, next) {
-    const header = req.headers.authorization;
-
-    if (!header) {
-        return res.status(401).json({ error: 'Access denied' });
-    }
-
-    const token = header.split(' ')[1];
-
+// DELETE
+app.delete('/students/:id', auth, async (req, res) => {
     try {
-        const verified = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = verified;
-        next();
-    } catch (err) {
-        res.status(400).json({ error: 'Invalid token' });
+        await Student.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Deleted' });
+    } catch {
+        res.status(500).json({ error: 'Server error' });
     }
-}
-// =============================
-// START SERVER
-// =============================
+});
 
+// ================= START SERVER =================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on ${PORT}`);
 });
-
-
