@@ -89,21 +89,31 @@ app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
+        console.log("LOGIN EMAIL:", email);
+
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ error: 'User not found' });
+
+        console.log("FOUND USER:", user);
+
+        if (!user) {
+            return res.status(400).json({ error: 'User not found' });
+        }
 
         const match = await bcrypt.compare(password, user.password);
-        if (!match) return res.status(400).json({ error: 'Wrong password' });
+
+        if (!match) {
+            return res.status(400).json({ error: 'Wrong password' });
+        }
 
         const token = jwt.sign(
             { id: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '1d' }
+            process.env.JWT_SECRET
         );
 
-        res.json({ token, user: { email: user.email } });
+        res.json({ token });
 
-    } catch {
+    } catch (err) {
+        console.log("LOGIN ERROR:", err);
         res.status(500).json({ error: 'Server error' });
     }
 });
