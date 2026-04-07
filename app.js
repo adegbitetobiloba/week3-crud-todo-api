@@ -66,18 +66,20 @@ app.post('/register', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({ error: 'All fields required' });
-        }
+        console.log("REGISTER DATA:", email, password);
 
         const hashed = await bcrypt.hash(password, 10);
+
         const user = new User({ email, password: hashed });
 
         await user.save();
 
+        console.log("USER SAVED:", user);
+
         res.json({ message: 'Registered successfully' });
 
-    } catch {
+    } catch (err) {
+        console.log("REGISTER ERROR:", err);
         res.status(500).json({ error: 'Server error' });
     }
 });
