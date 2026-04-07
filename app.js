@@ -55,6 +55,12 @@ app.get('/', (req, res) => {
     res.send('API running 🚀');
 });
 
+
+app.get('/debug-users', async (req, res) => {
+    const users = await User.find();
+    res.json(users);
+});
+
 // REGISTER
 app.post('/register', async (req, res) => {
     try {
