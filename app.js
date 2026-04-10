@@ -11,6 +11,16 @@ app.use(cors({
   origin: "*"
 }));
 
+const connectDB = require("./config/db");
+
+const authRoutes = require("./routes/authRoutes");
+
+connectDB();
+
+app.use("/api/auth", authRoutes);
+
+
+
 app.use(express.json());
 
 // CONNECT DB
@@ -156,6 +166,8 @@ app.delete('/students/:id', auth, async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
+
+const otp = Math.floor(100000 + Math.random() * 900000);
 
 // ================= START SERVER =================
 const PORT = process.env.PORT || 3000;
