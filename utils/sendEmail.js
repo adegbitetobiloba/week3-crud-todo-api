@@ -1,22 +1,47 @@
 const nodemailer = require("nodemailer");
 
-const sendEmail = async (email, otp) => {
+// Sends the OTP email. Which transport is used depends on the environment:
+//  1. BREVO_API_KEY  -> HTTPS API (works on Render's free tier; SMTP ports are blocked there)
+//  2. EMAIL_USER/PASS -> Gmail SMTP (fine locally or on a paid host)
+//  3. neither, outside production -> print the code in the server log (development only)
+const sendEmail = async (to, otp) => {
+  const subject = "Your FVIC verification code";
+  const html = `<h2>Your verification code is: ${otp}</h2><p>It expires in 5 minutes.</p>`;
 
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
+  if (process.env.BREVO_API_KEY) {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": process.env.BREVO_API_KEY,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { email: process.env.EMAIL_FROM, name: "FVIC" },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+    if (!res.ok) throw new Error(`Brevo responded ${res.status}`);
+    return;
+  }
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: "Your OTP Code",
-    html: `<h2>Your OTP is: ${otp}</h2>`
-  });
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    });
+    await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, html });
+    return;
+  }
 
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[DEV EMAIL] OTP for ${to}: ${otp}`);
+    return;
+  }
+
+  throw new Error("No email provider configured");
 };
 
 module.exports = sendEmail;
