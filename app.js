@@ -1,177 +1,45 @@
-const express = require('express');
-const app = express();
-require('dotenv').config();
-
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-
-const cors = require('cors');
-app.use(cors({
-  origin: "*"
-}));
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
 
 const connectDB = require("./config/db");
-
 const authRoutes = require("./routes/authRoutes");
+const studentRoutes = require("./routes/studentRoutes");
 
-connectDB();
+const app = express();
+
+app.set("trust proxy", 1); // Render sits behind a proxy; needed for correct client IPs (rate limiting)
+app.use(helmet());
+app.use(
+  cors({
+    // Comma-separated list in CORS_ORIGINS, e.g. https://my-site.netlify.app. Defaults to any origin.
+    origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim()) : "*",
+  })
+);
+app.use(express.json()); // MUST come before the routes, or req.body is empty
+if (process.env.NODE_ENV !== "test") app.use(morgan("tiny"));
+
+app.get("/", (req, res) => res.send("API running 🚀"));
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 app.use("/api/auth", authRoutes);
+app.use("/students", studentRoutes);
 
+app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
-
-app.use(express.json());
-
-// CONNECT DB
-mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log('MongoDB Connected ✅'))
-.catch(err => console.log(err));
-
-// ================= USER MODEL =================
-const userSchema = new mongoose.Schema({
-    email: { type: String, required: true },
-    password: { type: String, required: true }
-});
-const User = mongoose.model('User', userSchema);
-
-// ================= STUDENT MODEL =================
-const studentSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    course: { type: String, required: true },
-    active: { type: Boolean, default: true }
-});
-const Student = mongoose.model('Student', studentSchema);
-
-// ================= AUTH MIDDLEWARE =================
-function auth(req, res, next) {
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) return res.status(401).json({ error: "No token" });
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-        next();
-    } catch {
-        res.status(401).json({ error: "Invalid token" });
-    }
+async function start() {
+  if (!process.env.JWT_SECRET || !process.env.MONGO_URI) {
+    console.error("Missing JWT_SECRET or MONGO_URI environment variable");
+    process.exit(1);
+  }
+  await connectDB();
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`Server running on ${PORT}`));
 }
 
-// ================= ROUTES =================
+// Only start listening when run directly (node app.js), so tests can import `app`.
+if (require.main === module) start();
 
-// ROOT
-app.get('/', (req, res) => {
-    res.send('API running 🚀');
-});
-
-
-app.get('/debug-users', async (req, res) => {
-    const users = await User.find();
-    res.json(users);
-});
-
-// REGISTER
-app.post('/register', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        console.log("REGISTER DATA:", email, password);
-
-        const hashed = await bcrypt.hash(password, 10);
-
-        const user = new User({ email, password: hashed });
-
-        await user.save();
-
-        console.log("USER SAVED:", user);
-
-        res.json({ message: 'Registered successfully' });
-
-    } catch (err) {
-        console.log("REGISTER ERROR:", err);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// LOGIN
-app.post('/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        console.log("LOGIN EMAIL:", email);
-
-        const user = await User.findOne({ email });
-
-        console.log("FOUND USER:", user);
-
-        if (!user) {
-            return res.status(400).json({ error: 'User not found' });
-        }
-
-        const match = await bcrypt.compare(password, user.password);
-
-        if (!match) {
-            return res.status(400).json({ error: 'Wrong password' });
-        }
-
-        const token = jwt.sign(
-            { id: user._id },
-            process.env.JWT_SECRET
-        );
-
-        res.json({ token });
-
-    } catch (err) {
-        console.log("LOGIN ERROR:", err);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// CREATE STUDENT
-app.post('/students', auth, async (req, res) => {
-    try {
-        const { name, course } = req.body;
-
-        if (!name || !course) {
-            return res.status(400).json({ error: 'Required fields missing' });
-        }
-
-        const student = new Student({ name, course });
-        await student.save();
-
-        res.status(201).json(student);
-
-    } catch {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// GET ALL
-app.get('/students', auth, async (req, res) => {
-    try {
-        const students = await Student.find();
-        res.json(students);
-    } catch {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// DELETE
-app.delete('/students/:id', auth, async (req, res) => {
-    try {
-        await Student.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Deleted' });
-    } catch {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-const otp = Math.floor(100000 + Math.random() * 900000);
-
-// ================= START SERVER =================
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
-});
+module.exports = app;
